@@ -1,0 +1,27 @@
+version: '3'
+services:
+  destination_postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: destination_db
+    ports:
+      - "5432:5432"
+    networks:
+      - elt-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  elt_script:
+    build:
+      context: ./elt_script
+      dockerfile: Dockerfile
+    command: ["python", "main.py"]
+    networks:
+      - elt-network
+    depends_on:
+      destination_postgres:
+        condition: service_healthy
