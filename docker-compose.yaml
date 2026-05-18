@@ -8,6 +8,9 @@ services:
       POSTGRES_DB: destination_db
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Auto-creates tables
     networks:
       - elt-network
     healthcheck:
@@ -15,13 +18,20 @@ services:
       interval: 5s
       retries: 5
 
-  elt_script:
-    build:
-      context: ./elt_script
-      dockerfile: Dockerfile
-    command: ["python", "main.py"]
-    networks:
-      - elt-network
-    depends_on:
-      destination_postgres:
-        condition: service_healthy
+volumes:
+  postgres_data:
+
+networks:
+  elt-network:
+    driver: bridge
+
+#  elt_script:
+#    build:
+#      context: ./elt_script
+#      dockerfile: Dockerfile
+#    command: ["python", "main.py"]
+#    networks:
+#      - elt-network
+#    depends_on:
+#      destination_postgres:
+#        condition: service_healthy

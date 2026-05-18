@@ -69,6 +69,31 @@ def extract_orders(token, store):
     logger.info(f"Order extraction complete. Total orders: {len(all_orders)}")
     return all_orders
 
+
+def extract_products(token, store):
+    """Extract all products and their variants from Shopify API."""
+    url = f"https://{store}/admin/api/2023-10/products.json"
+    params = {"limit": 250}
+    all_products = []
+    logger.info("Starting product extraction...")
+
+    while url:
+        response = requests.get(url, headers=get_headers(token), params=params)
+        response.raise_for_status()
+        batch = response.json().get("products", [])
+        all_products.extend(batch)
+        logger.info(f"Fetched {len(batch)} products (total: {len(all_products)})")
+
+        link_header = response.headers.get("Link", "")
+        if 'rel="next"' in link_header:
+            url = link_header.split("<")[1].split(">")[0]
+            params = {}
+        else:
+            url = None
+
+    logger.info(f"Product extraction complete. Total products: {len(all_products)}")
+    return all_products
+
 if __name__ == "__main__":
     token = get_access_token()
     store = os.getenv('FAKER_STORE_URL')
