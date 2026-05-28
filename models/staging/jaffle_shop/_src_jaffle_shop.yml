@@ -15,5 +15,6 @@ sources:
       loaded_at_field: _etl_loaded_at
     tables:
       - name: customers
-        freshness: null
+        config:
+          freshness: null
       - name: orders
