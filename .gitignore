@@ -1,1 +1,9 @@
+# Credentials
 .env
+secrets/
+*.pem
+
+# dbt
+target/
+dbt_packages/
+logs/

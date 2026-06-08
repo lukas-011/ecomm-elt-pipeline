@@ -9,13 +9,13 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 def get_db_connection():
-    """Create PostgreSQL connection."""
-    db_url = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    """Create Snowflake connection."""
+    db_url = f"snowflake://{os.getenv('SNOWFLAKE_USER')}:{os.getenv('SNOWFLAKE_PASSWORD')}@{os.getenv('SNOWFLAKE_ACCOUNT')}/"
     engine = create_engine(db_url)
     return engine
 
-def load_to_postgres(df, table_name, if_exists='append', chunksize=1000):
-    """Load DataFrame to PostgreSQL using raw SQL."""
+def load_to_snowflake(df, table_name, if_exists='append', chunksize=1000):
+    """Load DataFrame to Snowflake using raw SQL."""
     if df.empty:
         logger.warning(f"DataFrame for {table_name} is empty, skipping.")
         return
