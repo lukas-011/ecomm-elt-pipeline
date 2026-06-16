@@ -40,6 +40,7 @@ def get_headers(token):
         "X-Shopify-Access-Token": token
     }
 
+# Extracts all orders from the Shopify API, handling pagination and logging progress. Returns a list of order dictionaries.
 def extract_orders(token, store):
     """Extract all orders from Shopify API with pagination."""
     url = f"https://{store}/admin/api/2023-10/orders.json"
@@ -70,6 +71,7 @@ def extract_orders(token, store):
     return all_orders
 
 
+# Similar function to extract products, handling pagination and logging progress. Returns a list of product dictionaries.
 def extract_products(token, store):
     """Extract all products and their variants from Shopify API."""
     url = f"https://{store}/admin/api/2023-10/products.json"

@@ -1,0 +1,8 @@
+sources:
+  - name: gym_whale
+    database: elt_gym_whale
+    schema: gym_whale
+    tables:
+      - name: gym_whale
+        identifier: gym_whale
+        schema: staging_gym_whale
