@@ -1,6 +1,19 @@
-pandas
-sqlalchemy
-psycopg2-binary
-prophet
+# Extract (01-Extract) + EL orchestrator (elt_pipeline.py)
+requests
+python-dotenv
+
+# Load (02-Load) — Snowflake key-pair auth
+snowflake-connector-python[pandas]
+cryptography
+
+# Generate fake data (00-Generate-Fake-Data)
 ShopifyAPI
 faker
+
+# Forecast (04-Forecast)
+prophet
+pandas
+matplotlib
+
+# Transform (03-Transform) is run with the dbt CLI, installed separately:
+#   pip install dbt-snowflake
