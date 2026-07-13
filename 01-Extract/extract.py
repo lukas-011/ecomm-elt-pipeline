@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Pinning the API version keeps responses stable; bump deliberately, not by drift.
-API_VERSION = "2023-10"
+API_VERSION = "2026-04"
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ API_VERSION = "2023-10"
 # ---------------------------------------------------------------------------
 def get_access_token() -> str:
     """Fetch a fresh access token using client credentials. Valid for 24 hours."""
-    store = os.getenv("FAKER_STORE_URL")
+    store = os.getenv("SHOPIFY_STORE_URL")
     logger.info(f"Requesting access token for store: {store}")
     try:
         response = requests.post(
@@ -42,8 +42,8 @@ def get_access_token() -> str:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             data={
                 "grant_type": "client_credentials",
-                "client_id": os.getenv("FAKER_CLIENT_ID"),
-                "client_secret": os.getenv("FAKER_CLIENT_SECRET"),
+                "client_id": os.getenv("SHOPIFY_CLIENT_ID"),
+                "client_secret": os.getenv("SHOPIFY_CLIENT_SECRET"),
             },
         )
         response.raise_for_status()
@@ -167,6 +167,8 @@ def _get_locations(token: str, store: str) -> list[dict[str, Any]]:
     """Fetch the store's locations (small, unpaginated list)."""
     url = f"https://{store}/admin/api/{API_VERSION}/locations.json"
     response = requests.get(url, headers=get_headers(token))
+    if not response.ok:
+        logger.error(f"Error fetching locations: {response.status_code} - {response.text}")
     response.raise_for_status()
     return response.json().get("locations", [])
 
@@ -252,8 +254,13 @@ if __name__ == "__main__":
     )
 
     token = get_access_token()
-    store = os.getenv("FAKER_STORE_URL")
+    store = os.getenv("SHOPIFY_STORE_URL")
 
+    resp = requests.get(
+    f"https://{store}/admin/oauth/access_scopes.json",
+    headers={"X-Shopify-Access-Token": token}
+    )
+    logger.info(f"Access scopes: {resp.json()}")
     # Pull products once and reuse them for the inventory join.
     products = extract_products(token, store)
     orders = extract_orders(token, store)
