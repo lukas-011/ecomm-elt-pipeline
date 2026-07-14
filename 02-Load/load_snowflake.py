@@ -4,7 +4,11 @@ Snowflake loader for the Shopify ELT pipeline.
 Responsible for the "Load" stage: taking raw records pulled from the Shopify
 Admin API and persisting them into the RAW schema in Snowflake. Each public
 loader (orders, products, inventory) creates its target table if needed and
-inserts the supplied records inside a single transaction.
+upserts the supplied records inside a single transaction.
+
+Loads are idempotent: records are written with MERGE on each entity's natural
+key, so re-running the pipeline over an overlapping window updates the existing
+rows instead of duplicating them.
 """
 
 import os
@@ -27,8 +31,10 @@ load_dotenv()
 # Schema definitions
 # ---------------------------------------------------------------------------
 # Kept together so the table contracts live in one place. Note: Snowflake only
-# enforces NOT NULL — PRIMARY KEY is metadata-only — so real uniqueness/quality
-# checks belong in the dbt layer downstream.
+# enforces NOT NULL — PRIMARY KEY is metadata-only, so it will NOT stop a
+# duplicate insert. Uniqueness is enforced by the MERGE statements below (see
+# MERGE_STATEMENTS), which key on the natural key declared here; the dbt layer
+# still owns the broader data-quality tests.
 TABLE_SCHEMAS: dict[str, str] = {
     "raw.orders": """
         CREATE TABLE IF NOT EXISTS raw.orders (
@@ -69,24 +75,117 @@ TABLE_SCHEMAS: dict[str, str] = {
     """,
 }
 
-# Parameterized INSERT statements, one per target table. The "?" placeholders
-# are positional and must line up with the tuples produced by each row-mapper.
-INSERT_STATEMENTS: dict[str, str] = {
+# Parameterized MERGE (upsert) statements, one per target table. The "?"
+# placeholders are positional and must line up with the tuples produced by each
+# row-mapper.
+#
+# Why MERGE and not INSERT: Snowflake does not enforce PRIMARY KEY, so a plain
+# INSERT would duplicate every record on a re-run and silently double-count the
+# downstream marts. MERGE makes the load idempotent — matching on the natural
+# key, it updates the row if it already exists and inserts it if it does not.
+# This also picks up Shopify-side mutations (an order's financial_status moving
+# from "pending" to "paid", say), which an insert-only load would never see.
+#
+# Two details worth knowing:
+#   - JSON columns are bound as text and wrapped in PARSE_JSON(), because
+#     Snowflake will not implicitly coerce a VARCHAR bind into a VARIANT column.
+#   - loaded_at is set explicitly in the UPDATE branch; the column DEFAULT only
+#     fires on INSERT, so without this an updated row would keep its original
+#     load timestamp.
+MERGE_STATEMENTS: dict[str, str] = {
     "raw.orders": """
-        INSERT INTO raw.orders
-        (id, customer_id, total_price, created_at, order_number,
-         financial_status, currency, updated_at, line_items)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        MERGE INTO raw.orders AS target
+        USING (
+            SELECT
+                ? AS id,
+                ? AS customer_id,
+                ? AS total_price,
+                ? AS created_at,
+                ? AS order_number,
+                ? AS financial_status,
+                ? AS currency,
+                ? AS updated_at,
+                PARSE_JSON(?) AS line_items
+        ) AS source
+        ON target.id = source.id
+        WHEN MATCHED THEN UPDATE SET
+            target.customer_id      = source.customer_id,
+            target.total_price      = source.total_price,
+            target.created_at       = source.created_at,
+            target.order_number     = source.order_number,
+            target.financial_status = source.financial_status,
+            target.currency         = source.currency,
+            target.updated_at       = source.updated_at,
+            target.line_items       = source.line_items,
+            target.loaded_at        = CURRENT_TIMESTAMP()
+        WHEN NOT MATCHED THEN INSERT
+            (id, customer_id, total_price, created_at, order_number,
+             financial_status, currency, updated_at, line_items, loaded_at)
+        VALUES
+            (source.id, source.customer_id, source.total_price,
+             source.created_at, source.order_number, source.financial_status,
+             source.currency, source.updated_at, source.line_items,
+             CURRENT_TIMESTAMP())
     """,
     "raw.products": """
-        INSERT INTO raw.products
-        (id, title, product_type, vendor, handle, created_at, tags)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        MERGE INTO raw.products AS target
+        USING (
+            SELECT
+                ? AS id,
+                ? AS title,
+                ? AS product_type,
+                ? AS vendor,
+                ? AS handle,
+                ? AS created_at,
+                PARSE_JSON(?) AS tags
+        ) AS source
+        ON target.id = source.id
+        WHEN MATCHED THEN UPDATE SET
+            target.title        = source.title,
+            target.product_type = source.product_type,
+            target.vendor       = source.vendor,
+            target.handle       = source.handle,
+            target.created_at   = source.created_at,
+            target.tags         = source.tags,
+            target.loaded_at    = CURRENT_TIMESTAMP()
+        WHEN NOT MATCHED THEN INSERT
+            (id, title, product_type, vendor, handle, created_at, tags, loaded_at)
+        VALUES
+            (source.id, source.title, source.product_type, source.vendor,
+             source.handle, source.created_at, source.tags, CURRENT_TIMESTAMP())
     """,
+    # Inventory has no single unique column: a given inventory item exists once
+    # per location, so the natural key is (inventory_item_id, location_id).
+    # location_id is nullable, and NULL = NULL is NULL in SQL — which would make
+    # every un-located row look "not matched" and insert a duplicate on each run.
+    # EQUAL_NULL() is Snowflake's null-safe comparison and treats NULL = NULL as
+    # true, closing that hole.
     "raw.inventory": """
-        INSERT INTO raw.inventory
-        (inventory_item_id, variant_id, available, location_id, created_at, tracked)
-        VALUES (?, ?, ?, ?, ?, ?)
+        MERGE INTO raw.inventory AS target
+        USING (
+            SELECT
+                ? AS inventory_item_id,
+                ? AS variant_id,
+                ? AS available,
+                ? AS location_id,
+                ? AS created_at,
+                ? AS tracked
+        ) AS source
+        ON target.inventory_item_id = source.inventory_item_id
+           AND EQUAL_NULL(target.location_id, source.location_id)
+        WHEN MATCHED THEN UPDATE SET
+            target.variant_id = source.variant_id,
+            target.available  = source.available,
+            target.created_at = source.created_at,
+            target.tracked    = source.tracked,
+            target.loaded_at  = CURRENT_TIMESTAMP()
+        WHEN NOT MATCHED THEN INSERT
+            (inventory_item_id, variant_id, available, location_id, created_at,
+             tracked, loaded_at)
+        VALUES
+            (source.inventory_item_id, source.variant_id, source.available,
+             source.location_id, source.created_at, source.tracked,
+             CURRENT_TIMESTAMP())
     """,
 }
 
@@ -139,6 +238,11 @@ def _get_connection() -> SnowflakeConnection:
     credentials are hard-coded. The active schema is set to RAW, the landing
     zone for untransformed data.
 
+    paramstyle is pinned to "qmark" because the statements in this module use
+    positional "?" placeholders. The connector's default is "pyformat" (%s),
+    under which those "?" would be passed through to Snowflake as literal text
+    and fail to compile.
+
     Returns:
         SnowflakeConnection: An open connection. The caller owns it and is
         responsible for closing it.
@@ -154,6 +258,7 @@ def _get_connection() -> SnowflakeConnection:
             warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
             database=os.getenv("SNOWFLAKE_DATABASE"),
             schema="RAW",
+            paramstyle="qmark",
         )
     except Exception as e:
         logger.error(f"Error connecting to Snowflake: {e}")
@@ -169,28 +274,35 @@ def _load_records(
     row_mapper: RowMapper,
 ) -> int:
     """
-    Create a target table (if needed) and insert records in one transaction.
+    Create a target table (if needed) and upsert records in one transaction.
 
     This is the shared engine behind every public loader. It centralizes the
-    create-table, insert-loop, commit/rollback, and cleanup logic so the
+    create-table, merge-loop, commit/rollback, and cleanup logic so the
     per-entity functions only need to declare *what* to load, not *how*.
 
-    The whole operation is atomic: if any single insert fails, the transaction
-    is rolled back and nothing is persisted, so a partial load never leaves the
+    Each record is written with a MERGE on its natural key, which makes the load
+    idempotent: loading the same record twice updates the existing row rather
+    than creating a second copy. Re-running the pipeline over an overlapping
+    extract window is therefore safe.
+
+    The whole operation is atomic: if any single merge fails, the transaction is
+    rolled back and nothing is persisted, so a partial load never leaves the
     table in an inconsistent state.
 
     Args:
-        table_name: Key into TABLE_SCHEMAS / INSERT_STATEMENTS, e.g. "raw.orders".
+        table_name: Key into TABLE_SCHEMAS / MERGE_STATEMENTS, e.g. "raw.orders".
         records: Raw API records to load. An empty sequence is a no-op.
         row_mapper: Function mapping one record to the positional tuple that
-            matches this table's INSERT statement.
+            matches this table's MERGE statement.
 
     Returns:
-        int: The number of records inserted (0 if the input was empty).
+        int: The number of records processed (0 if the input was empty). This
+        counts records sent to Snowflake, not rows newly inserted — an upserted
+        record that already existed still counts.
 
     Raises:
-        KeyError: If table_name has no registered schema/insert statement.
-        Exception: Re-raised after rollback if any insert fails.
+        KeyError: If table_name has no registered schema/merge statement.
+        Exception: Re-raised after rollback if any merge fails.
     """
     # Guard clause: skip the connection overhead entirely if there's nothing
     # to do. This keeps empty API responses from being treated as errors.
@@ -199,7 +311,7 @@ def _load_records(
         return 0
 
     create_sql = TABLE_SCHEMAS[table_name]
-    insert_sql = INSERT_STATEMENTS[table_name]
+    merge_sql = MERGE_STATEMENTS[table_name]
 
     conn = _get_connection()
     cur = conn.cursor()
@@ -207,19 +319,19 @@ def _load_records(
         # Idempotent: CREATE TABLE IF NOT EXISTS is safe to run every load.
         cur.execute(create_sql)
 
-        # Row-by-row insert. Fine for the current volume; for large batches
-        # switch to cur.executemany(insert_sql, [row_mapper(r) for r in records])
-        # or Snowflake's write_pandas for far fewer round trips.
+        # Row-by-row merge. Fine for the current volume; for large batches, stage
+        # the records into a temp table and run a single set-based MERGE against
+        # it, which collapses N round trips into one.
         for record in records:
-            cur.execute(insert_sql, row_mapper(record))
+            cur.execute(merge_sql, row_mapper(record))
 
-        # Commit once at the end so the inserts land as a single atomic unit.
+        # Commit once at the end so the merges land as a single atomic unit.
         conn.commit()
         logger.info(f"Successfully loaded {len(records)} rows into {table_name}")
         return len(records)
 
     except Exception as e:
-        # Undo every insert from this run so we never leave a half-loaded table.
+        # Undo every merge from this run so we never leave a half-loaded table.
         conn.rollback()
         logger.error(f"Error loading into {table_name}: {e}", exc_info=True)
         raise
@@ -286,38 +398,41 @@ def _map_inventory(item: dict[str, Any]) -> tuple:
 # ---------------------------------------------------------------------------
 def load_orders(orders: Sequence[dict[str, Any]]) -> int:
     """
-    Load Shopify orders into raw.orders.
+    Upsert Shopify orders into raw.orders, keyed on the order id.
 
     Args:
         orders: Order records as returned by the Shopify Admin API.
 
     Returns:
-        int: Number of orders inserted.
+        int: Number of orders loaded (inserted or updated).
     """
     return _load_records("raw.orders", orders, _map_order)
 
 
 def load_products(products: Sequence[dict[str, Any]]) -> int:
     """
-    Load Shopify products into raw.products.
+    Upsert Shopify products into raw.products, keyed on the product id.
 
     Args:
         products: Product records as returned by the Shopify Admin API.
 
     Returns:
-        int: Number of products inserted.
+        int: Number of products loaded (inserted or updated).
     """
     return _load_records("raw.products", products, _map_product)
 
 
 def load_inventory(inventory_items: Sequence[dict[str, Any]]) -> int:
     """
-    Load Shopify inventory levels into raw.inventory.
+    Upsert Shopify inventory levels into raw.inventory.
+
+    Keyed on (inventory_item_id, location_id), since an inventory item has one
+    stock level per location.
 
     Args:
         inventory_items: Inventory-level records from the Shopify Admin API.
 
     Returns:
-        int: Number of inventory records inserted.
+        int: Number of inventory records loaded (inserted or updated).
     """
     return _load_records("raw.inventory", inventory_items, _map_inventory)
