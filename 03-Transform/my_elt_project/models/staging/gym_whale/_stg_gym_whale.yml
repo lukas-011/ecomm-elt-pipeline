@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: Cleaned, one-row-per-order staging model over raw.orders.
+    columns:
+      - name: order_id
+        description: Shopify order id (primary key).
+        data_tests:
+          - not_null
+          - unique
+      - name: order_date
+        description: Calendar date the order was created (daily grain for forecasting).
+        data_tests:
+          - not_null
+      - name: order_total
+        description: Order total in store currency.
+      - name: financial_status
+        description: Shopify financial status (paid, pending, refunded, voided, ...).
+
+  - name: stg_products
+    description: Cleaned, one-row-per-product staging model over raw.products.
+    columns:
+      - name: product_id
+        description: Shopify product id (primary key).
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_inventory
+    description: Cleaned inventory levels over raw.inventory (one row per item/location).
+    columns:
+      - name: inventory_item_id
+        description: Shopify inventory item id.
+        data_tests:
+          - not_null
+      - name: available_quantity
+        description: Units available at the location.

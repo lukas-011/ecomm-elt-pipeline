@@ -1,8 +1,29 @@
+version: 2
+
+# Source = the RAW schema that 02-Load/load_snowflake.py lands Shopify records in.
+# The loader pins its active schema to RAW and creates orders / products /
+# inventory there, so the staging models below read straight from these tables.
 sources:
   - name: gym_whale
-    database: elt_gym_whale
-    schema: gym_whale
+    description: Raw Shopify Admin API records for the gym-whale dev store, as landed by the Load stage.
+    database: ELT_GYM_WHALE
+    schema: RAW
     tables:
-      - name: gym_whale
-        identifier: gym_whale
-        schema: staging_gym_whale
+      - name: orders
+        description: One row per Shopify order, as returned by the Admin API.
+        columns:
+          - name: id
+            description: Shopify order id (primary key).
+            data_tests:
+              - not_null
+              - unique
+      - name: products
+        description: One row per Shopify product.
+        columns:
+          - name: id
+            description: Shopify product id (primary key).
+            data_tests:
+              - not_null
+              - unique
+      - name: inventory
+        description: One row per (inventory_item, location) stock level.
