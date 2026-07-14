@@ -2,7 +2,7 @@
 
 with source as (
 
-    select * from {{ source('gym_whale', 'products') }}
+    select * from {{ source('shopify', 'products') }}
 
 ),
 
