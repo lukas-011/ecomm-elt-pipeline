@@ -32,9 +32,30 @@ API_VERSION = "2026-04"
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+def get_store_url() -> str:
+    """
+    Resolve the Shopify store domain from the environment.
+
+    Single source of truth for *which* store this pipeline talks to. Both the
+    token request and every subsequent API call must target the same domain — a
+    token minted for one store is rejected by another — so callers should take
+    the domain from here rather than reading an env var of their own.
+
+    Returns:
+        str: The store domain, e.g. "gym-whale-rxzfdcpx.myshopify.com".
+
+    Raises:
+        RuntimeError: If SHOPIFY_STORE_URL is unset or empty.
+    """
+    store = os.getenv("SHOPIFY_STORE_URL")
+    if not store:
+        raise RuntimeError("SHOPIFY_STORE_URL is not set; check your .env file.")
+    return store
+
+
 def get_access_token() -> str:
     """Fetch a fresh access token using client credentials. Valid for 24 hours."""
-    store = os.getenv("SHOPIFY_STORE_URL")
+    store = get_store_url()
     logger.info(f"Requesting access token for store: {store}")
     try:
         response = requests.post(
@@ -254,7 +275,7 @@ if __name__ == "__main__":
     )
 
     token = get_access_token()
-    store = os.getenv("SHOPIFY_STORE_URL")
+    store = get_store_url()
 
     resp = requests.get(
     f"https://{store}/admin/oauth/access_scopes.json",

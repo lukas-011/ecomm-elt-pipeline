@@ -3,7 +3,7 @@
 
 with source as (
 
-    select * from {{ source('gym_whale', 'inventory') }}
+    select * from {{ source('shopify', 'inventory') }}
 
 ),
 

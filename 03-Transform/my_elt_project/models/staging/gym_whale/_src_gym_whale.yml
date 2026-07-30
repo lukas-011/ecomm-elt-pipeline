@@ -4,9 +4,9 @@ version: 2
 # The loader pins its active schema to RAW and creates orders / products /
 # inventory there, so the staging models below read straight from these tables.
 sources:
-  - name: gym_whale
+  - name: shopify
     description: Raw Shopify Admin API records for the gym-whale dev store, as landed by the Load stage.
-    database: ELT_GYM_WHALE
+    database: SHOPIFY_ELT
     schema: RAW
     tables:
       - name: orders
@@ -27,3 +27,8 @@ sources:
               - unique
       - name: inventory
         description: One row per (inventory_item, location) stock level.
+        columns:
+          - name: inventory_item_id
+            description: Shopify inventory item id (part of the natural key, alongside location_id).
+            data_tests:
+              - not_null
