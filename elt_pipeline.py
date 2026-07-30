@@ -31,6 +31,7 @@ from extract import (  # noqa: E402  (import after sys.path injection)
     extract_orders,
     extract_products,
     get_access_token,
+    get_store_url,
 )
 from load_snowflake import (  # noqa: E402
     load_inventory,
@@ -57,14 +58,15 @@ def run_el() -> dict[str, int]:
         ("orders", "products", "inventory").
 
     Raises:
+        RuntimeError: If SHOPIFY_STORE_URL is not configured.
         Exception: Propagated from any extract or load step. The load engine is
             transactional per table, so a failure leaves that table unchanged.
     """
-    store = os.getenv("FAKER_STORE_URL")
-    if not store:
-        raise RuntimeError("FAKER_STORE_URL is not set; check your .env file.")
+    # Take the domain from the extract module so the token and the API calls it
+    # signs can never end up pointing at two different stores.
+    store = get_store_url()
 
-    logger.info("Authenticating with Shopify...")
+    logger.info("Authenticating with Shopify (store: %s)...", store)
     token = get_access_token()
 
     # Extract. Pull products first so inventory can reuse them for its join.
