@@ -15,7 +15,7 @@ seeds:
     +schema: raw
 
 models:
-  your_project_name:
+  my_elt_project:
     staging:
       +materialized: view
       +schema: staging

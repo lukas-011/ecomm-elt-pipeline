@@ -8,5 +8,5 @@ with source as (
         tracked,
         created_at,
         loaded_at
-    from {{ source('staging', 'orders') }}
+    from {{ source('shopify', 'orders') }}
 )

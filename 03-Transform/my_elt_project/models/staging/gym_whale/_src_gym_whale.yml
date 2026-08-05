@@ -3,6 +3,11 @@ version: 2
 # Source = the RAW schema that 02-Load/load_snowflake.py lands Shopify records in.
 # The loader pins its active schema to RAW and creates orders / products /
 # inventory there, so the staging models below read straight from these tables.
+
+
+# Not going to use the freshness test in this project, but leaving it here as a reminder that you can
+
+
 sources:
   - name: shopify
     description: Raw Shopify Admin API records for the gym-whale dev store, as landed by the Load stage.
@@ -11,10 +16,8 @@ sources:
     tables:
       - name: orders
         description: One row per Shopify order, as returned by the Admin API.
-        loaded_at_field: loaded_at
-        freshness:
-          warn_after: {count: 12, period: hour}
-          error_after: {count: 24, period: hour}
+        config:
+          loaded_at_field: loaded_at
         columns:
           - name: id
             description: Shopify order id (primary key).
@@ -49,16 +52,13 @@ sources:
             description: Timestamp this record was loaded into the warehouse by the EL tool.
         data_tests:
           - dbt_utils.unique_combination_of_columns:
-              combination_of_columns:
-                - id
-            # Redundant with the column-level unique test above — included here
-            # only if you want a single place to see all table-level grain tests.
+              arguments:
+                combination_of_columns:
+                  - id
       - name: products
         description: One row per Shopify product.
-        loaded_at_field: loaded_at
-        freshness:
-          warn_after: {count: 12, period: hour}
-          error_after: {count: 24, period: hour}
+        config:
+          loaded_at_field: loaded_at
         columns:
           - name: id
             description: Shopify product id (primary key).
@@ -83,10 +83,8 @@ sources:
             description: Timestamp this record was loaded into the warehouse by the EL tool.
       - name: inventory
         description: One row per (inventory_item, location) stock level.
-        loaded_at_field: loaded_at
-        # freshness: (not going to use this since fake data is loaded in a single batch)
-          # warn_after: {count: 12, period: hour}
-          # error_after: {count: 24, period: hour}
+        config:
+          loaded_at_field: loaded_at
         columns:
           - name: inventory_item_id
             description: Shopify inventory item id (part of the natural key, alongside location_id).
