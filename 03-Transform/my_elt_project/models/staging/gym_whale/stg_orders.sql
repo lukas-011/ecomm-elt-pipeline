@@ -21,12 +21,13 @@ renamed as (
         created_at                  as ordered_at,
         cast(created_at as date)    as order_date,
 
-        total_price                 as order_total,
+        total_price                 as order_total_price,
         financial_status,
         currency,
         line_items,
         updated_at,
-        loaded_at
+        loaded_at,
+        processed_at                as order_timestamp
 
     from source
 
