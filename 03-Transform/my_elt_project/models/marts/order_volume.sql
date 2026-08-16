@@ -1,12 +1,11 @@
 
-with source as (
+with order_volume as (
     select
-        id,
-        product_id,
-        location_id,
-        available,
-        tracked,
-        created_at,
-        loaded_at
-    from {{ source('shopify', 'orders') }}
+        order_date,
+        count(order_id) as order_count,
+        sum(order_total) as total_order_value
+    from 
+        {{ ref('stg_orders') }}
+    where
+        order_status in ('authorized', 'paid')
 )

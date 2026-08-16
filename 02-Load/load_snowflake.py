@@ -47,6 +47,7 @@ TABLE_SCHEMAS: dict[str, str] = {
             customer_id BIGINT,
             currency VARCHAR(3) DEFAULT 'USD',
             updated_at TIMESTAMP,
+            processed_at TIMESTAMP,
             loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
         )
     """,
@@ -105,6 +106,7 @@ MERGE_STATEMENTS: dict[str, str] = {
                 ? AS financial_status,
                 ? AS currency,
                 ? AS updated_at,
+                ? AS processed_at,
                 PARSE_JSON(?) AS line_items
         ) AS source
         ON target.id = source.id
@@ -116,16 +118,18 @@ MERGE_STATEMENTS: dict[str, str] = {
             target.financial_status = source.financial_status,
             target.currency         = source.currency,
             target.updated_at       = source.updated_at,
+            target.processed_at     = source.processed_at,
             target.line_items       = source.line_items,
             target.loaded_at        = CURRENT_TIMESTAMP()
         WHEN NOT MATCHED THEN INSERT
             (id, customer_id, total_price, created_at, order_number,
-             financial_status, currency, updated_at, line_items, loaded_at)
+             financial_status, currency, updated_at, processed_at, line_items,
+             loaded_at)
         VALUES
             (source.id, source.customer_id, source.total_price,
              source.created_at, source.order_number, source.financial_status,
-             source.currency, source.updated_at, source.line_items,
-             CURRENT_TIMESTAMP())
+             source.currency, source.updated_at, source.processed_at,
+             source.line_items, CURRENT_TIMESTAMP())
     """,
     "raw.products": """
         MERGE INTO raw.products AS target
@@ -364,6 +368,7 @@ def _map_order(order: dict[str, Any]) -> tuple:
         order.get("financial_status"),
         order.get("currency"),
         order.get("updated_at"),
+        order.get("processed_at"),                  # when Shopify processed the order
         json.dumps(order.get("line_items", [])),   # nested list -> JSON for VARIANT
     )
 
