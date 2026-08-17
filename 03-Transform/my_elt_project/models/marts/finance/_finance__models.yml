@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: fct_order_volume
+    description: >
+      Continuous daily order-volume series (one row per calendar day between the
+      first and last order). Days with no orders are 0. This is the input to the
+      Prophet forecast in 04-Forecast.
+    columns:
+      - name: order_date
+        description: Calendar day (Prophet's `ds`). Continuous, no gaps.
+      - name: order_count
+        description: Number of orders placed that day (Prophet's `y`).
+      - name: gross_revenue
+        description: Sum of order totals placed that day.
+  
+  - name: fct_revenue_daily
+    description: >
+      Daily revenue. This is the input to the Prophet forecast in 04-Forecast.
+    columns:
+      - name: order_date
+        description: Calendar day (Prophet's `ds`). Continuous, no gaps.
+      - name: gross_revenue
+        description: Sum of order totals placed that day (Prophet's `y`).
+        
+  - name: fct_revenue_by_product
+    description: >
+      Daily revenue by product. This is the input to the Prophet forecast in
+      04-Forecast.
+    columns:
+      - name: order_date
+        description: Calendar day (Prophet's `ds`). Continuous, no gaps.
+      - name: product_id
+        description: Product ID (Prophet's `cap`).
+      - name: gross_revenue
+        description: Sum of order totals placed that day for that product (Prophet's `y`).
