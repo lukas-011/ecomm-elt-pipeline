@@ -15,19 +15,14 @@ renamed as (
         id                          as order_id,
         customer_id,
         order_number,
-
-        -- Keep the full timestamp for detail, plus a date grain for daily rollups
-        -- (the order_volume mart and Prophet work on a daily series).
-        created_at                  as ordered_at,
-        cast(created_at as date)    as order_date,
-
+        created_at,
         total_price                 as order_total_price,
         financial_status,
         currency,
         line_items,
         updated_at,
         loaded_at,
-        processed_at                as order_timestamp
+        cast(processed_at as date)    as order_date
 
     from source
 

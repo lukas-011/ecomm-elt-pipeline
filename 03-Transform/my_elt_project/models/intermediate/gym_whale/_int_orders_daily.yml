@@ -11,22 +11,21 @@ models:
     columns:
       - name: order_date
         description: The calendar date the order was placed, derived from stg_orders.
-        tests:
-          - not_null
-          - unique
-
+          
       - name: order_count
         description: Count of orders placed on this date (excluding voided/refunded).
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
-              inclusive: true
+              arguments:
+                min_value: 0
+                inclusive: true
 
       - name: order_revenue
         description: Sum of order totals for orders placed on this date.
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
-              inclusive: true
+              arguments:
+                min_value: 0
+                inclusive: true

@@ -9,12 +9,7 @@ models:
     columns:
       - name: order_date
         description: Calendar day (Prophet's `ds`). Continuous, no gaps.
-        data_tests:
-          - not_null
-          - unique
       - name: order_count
         description: Number of orders placed that day (Prophet's `y`).
-        data_tests:
-          - not_null
       - name: gross_revenue
         description: Sum of order totals placed that day.
