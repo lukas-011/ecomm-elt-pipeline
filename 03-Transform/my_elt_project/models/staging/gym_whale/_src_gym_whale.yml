@@ -3,6 +3,11 @@ version: 2
 # Source = the RAW schema that 02-Load/load_snowflake.py lands Shopify records in.
 # The loader pins its active schema to RAW and creates orders / products /
 # inventory there, so the staging models below read straight from these tables.
+
+
+# Not going to use the freshness test in this project, but leaving it here as a reminder that you can
+
+
 sources:
   - name: shopify
     description: Raw Shopify Admin API records for the gym-whale dev store, as landed by the Load stage.
@@ -11,24 +16,89 @@ sources:
     tables:
       - name: orders
         description: One row per Shopify order, as returned by the Admin API.
+        config:
+          loaded_at_field: loaded_at
         columns:
           - name: id
             description: Shopify order id (primary key).
             data_tests:
               - not_null
               - unique
+          - name: created_at
+            description: Timestamp the order was created in Shopify.
+            data_tests:
+              - not_null
+          - name: total_price
+            description: Total order price, in the order's currency.
+            data_tests:
+              - not_null
+          - name: order_number
+            description: Human-readable, sequential order number shown to customers.
+          - name: financial_status
+            description: Shopify payment status for the order (e.g. paid, pending, refunded).
+          - name: line_items
+            description: >
+              Raw JSON array of line items on the order, as returned by the Admin API.
+              Requires flattening in staging — one order can contain many line items.
+          - name: customer_id
+            description: Shopify customer id associated with this order.
+          - name: currency
+            description: >
+              Currency code for the order. Defaults to USD at load time —
+              confirm whether this store transacts in multiple currencies.
+          - name: updated_at
+            description: Timestamp the order was last updated in Shopify.
+          - name: loaded_at
+            description: Timestamp this record was loaded into the warehouse by the EL tool.
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments:
+                combination_of_columns:
+                  - id
       - name: products
         description: One row per Shopify product.
+        config:
+          loaded_at_field: loaded_at
         columns:
           - name: id
             description: Shopify product id (primary key).
             data_tests:
               - not_null
               - unique
+          - name: title
+            description: Product title as shown in the Shopify admin and storefront.
+          - name: product_type
+            description: Free-text product category assigned by the merchant (e.g. "Supplements", "Apparel").
+          - name: vendor
+            description: Vendor/brand name associated with the product.
+          - name: handle
+            description: URL-friendly slug for the product, unique per store.
+          - name: created_at
+            description: Timestamp the product was created in Shopify.
+          - name: tags
+            description: >
+              Raw JSON array of tags applied to the product, as returned by the Admin API.
+              Requires flattening in staging if you need to filter/group by individual tags.
+          - name: loaded_at
+            description: Timestamp this record was loaded into the warehouse by the EL tool.
       - name: inventory
         description: One row per (inventory_item, location) stock level.
+        config:
+          loaded_at_field: loaded_at
         columns:
           - name: inventory_item_id
             description: Shopify inventory item id (part of the natural key, alongside location_id).
             data_tests:
               - not_null
+          - name: variant_id
+            description: Shopify product variant id associated with this inventory item.
+          - name: available
+            description: Quantity available at this location.
+          - name: location_id
+            description: Shopify location id (part of the natural key, alongside inventory_item_id).
+          - name: created_at
+            description: Timestamp the inventory record was created in Shopify.
+          - name: tracked
+            description: Whether Shopify tracks inventory quantities for this item.
+          - name: loaded_at
+            description: Timestamp this record was loaded into the warehouse by the EL tool.

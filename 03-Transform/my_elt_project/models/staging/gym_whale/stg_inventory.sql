@@ -16,7 +16,6 @@ renamed as (
         available                   as available_quantity,
         tracked                     as is_tracked,
         cast(created_at as date)    as created_date,
-        created_at,
         loaded_at
 
     from source

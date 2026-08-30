@@ -162,7 +162,7 @@ def extract_orders(token: str, store: str) -> list[dict[str, Any]]:
 
     Returns order records whose fields cover the loader's _map_order:
     id, customer.id, total_price, created_at, order_number, financial_status,
-    currency, updated_at, line_items.
+    currency, updated_at, processed_at, line_items.
     """
     logger.info("Starting order extraction...")
     orders = _paginate(token, store, "orders.json", "orders", {"status": "any"})

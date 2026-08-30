@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: fct_order_volume
+    description: >
+      Continuous daily order-volume series (one row per calendar day between the
+      first and last order). Days with no orders are 0. This is the input to the
+      Prophet forecast in 04-Forecast.
+    columns:
+      - name: ds
+        description: This represents the list of days that correspond to the data Prophet needs to injest
+      - name: y 
+        description: This represents the order volume for the day (ds) that is needed for Prophet
+  
+  - name: fct_revenue_daily
+    description: >
+      Daily revenue. This is the input to the Prophet forecast in 04-Forecast.
+    columns:
+      - name: ds
+        description: This represents the list of days that correspond to the data Prophet needs to injest
+      - name: gross_revenue
+        description: Sum of order totals placed that day (Prophet's `y`).
+
+  - name: fct_revenue_by_product
+    description: >
+      Daily revenue at product grain — one row per (calendar day, product) for
+      every product that has ever sold, with zero-filled days so per-product
+      series have no gaps. Powers the "which items earn the most revenue"
+      breakdown in Metabase, and can feed a per-product Prophet forecast
+      (`order_date` = ds, `gross_revenue` or `units_sold` = y) filtered to one
+      product_id. Voided and refunded orders are excluded.
+    columns:
+      - name: order_date
+        description: Calendar day (Prophet's `ds`). Continuous between the first and last order date, no gaps.
+        data_tests:
+          - not_null
+
+      - name: product_id
+        description: >
+          Shopify product id. NULL for line items whose product was deleted from
+          the catalog or that were custom one-offs — those roll up into a single
+          NULL-product series rather than being dropped.
+
+      - name: product_title
+        description: >
+          Current catalog title, falling back to the title captured on the order
+          when the product no longer exists in stg_products. Use this to group
+          and label products in Metabase.
+        data_tests:
+          - not_null
+
+      - name: vendor
+        description: Vendor/brand for the product.
+
+      - name: product_type
+        description: Merchant-assigned product category from the catalog. NULL for products no longer in stg_products.
+
+      - name: units_sold
+        description: Units of this product sold on this day (0 on days with no sales).
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+      - name: gross_revenue
+        description: Sum of quantity * unit_price for this product on this day, before line discounts.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+      - name: net_revenue
+        description: gross_revenue minus line-level discounts — what the product actually earned that day.
+        data_tests:
+          - not_null
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - order_date
+              - product_id

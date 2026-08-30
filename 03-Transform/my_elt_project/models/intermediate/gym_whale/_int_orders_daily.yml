@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: int_orders_daily
+    description: >
+      Orders aggregated to daily grain. Excludes voided and refunded orders,
+      since those don't represent realized order volume. Serves as a shared
+      building block for downstream marts (order volume, revenue, AOV, etc.)
+      — no consumer-specific shaping (e.g. date spines, renaming) happens here.
+
+    columns:
+      - name: order_date
+        description: The calendar date the order was placed, derived from stg_orders.
+          
+      - name: order_count
+        description: Count of orders placed on this date (excluding voided/refunded).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+      - name: order_revenue
+        description: Sum of order totals for orders placed on this date.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
