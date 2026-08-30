@@ -1,0 +1,75 @@
+version: 2
+
+models:
+  - name: int_order_line_items
+    description: >
+      One row per (order, line item), produced by flattening the raw Shopify
+      `line_items` VARIANT array on stg_orders. This is a pure unnesting step:
+      every line item on every order is present, including those on voided and
+      refunded orders, so downstream consumers can apply their own filters.
+      Shared building block for any product-grain analysis (revenue by product,
+      units sold, basket composition).
+
+    columns:
+      - name: line_item_id
+        description: Shopify line item id. Globally unique across orders, so it is the grain of this model.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: order_id
+        description: Shopify order id this line item belongs to.
+        data_tests:
+          - not_null
+
+      - name: order_date
+        description: The calendar date the order was placed, inherited from stg_orders.
+
+      - name: financial_status
+        description: >
+          Payment status of the parent order (paid, pending, refunded, voided, …).
+          Carried through so consumers can exclude non-realized revenue.
+
+      - name: product_id
+        description: >
+          Shopify product id for the item. Can be NULL when the product has been
+          deleted from the catalog or the line is a custom/one-off item.
+
+      - name: variant_id
+        description: Shopify variant id for the specific size/colour ordered.
+
+      - name: sku
+        description: Merchant-assigned SKU. Frequently NULL in this dev store.
+
+      - name: product_title
+        description: Product title as captured on the order (a point-in-time snapshot, not the current catalog title).
+
+      - name: vendor
+        description: Vendor/brand recorded on the line item at order time.
+
+      - name: quantity
+        description: Units of this product on the order.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+      - name: unit_price
+        description: Price of a single unit, in the order's currency.
+        data_tests:
+          - not_null
+
+      - name: line_discount
+        description: Total discount applied to this line (for the whole line, not per unit).
+
+      - name: gross_line_revenue
+        description: quantity * unit_price, before any discount.
+        data_tests:
+          - not_null
+
+      - name: net_line_revenue
+        description: gross_line_revenue minus the line discount — what the line actually contributed.
+        data_tests:
+          - not_null

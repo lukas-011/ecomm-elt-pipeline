@@ -1,5 +1,3 @@
--- Staging model for Shopify products. One row per product, materialized as a view.
-
 with source as (
 
     select * from {{ source('shopify', 'products') }}
